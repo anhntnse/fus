@@ -127,7 +127,9 @@ exports.register = (req, res) => {
             message: 'Internal server error. Please try again later.'
           });
         } else {
-          return res.status(200).redirect('/login');
+          return res.render('register', {
+          message: 'User registered'
+          });
         }
       });
     });
