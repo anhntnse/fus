@@ -25,6 +25,7 @@ app.use(express.json());
 app.use(cookieParser());
 
 app.set('view engine', 'hbs');
+// app.set('Login', path.join(__dirname, './src/Components'));
 
 db.connect( (error) => {
   if(error) {

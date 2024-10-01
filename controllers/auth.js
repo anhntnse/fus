@@ -1,6 +1,7 @@
 const mysql = require("mysql");
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
+const nodemailer = require('nodemailer');
 const { promisify } = require('util');
 
 const db = mysql.createConnection({
@@ -8,6 +9,16 @@ const db = mysql.createConnection({
   user: process.env.DATABASE_USER,
   password: process.env.DATABASE_PASSWORD,
   database: process.env.DATABASE
+});
+
+const transporter = nodemailer.createTransport({
+  host: 'live.smtp.mailtrap.io',
+  port: 587,
+  secure: false, 
+  auth: {
+    user: 'anhntnse181829@fpt.edu.vn',
+    pass: process.env.EMAIL_PASSWORD,
+  }
 });
 
 exports.login = async (req, res) => {
@@ -177,3 +188,71 @@ exports.logout = async (req, res) => {
 
   res.status(200).redirect('/');
 }
+
+exports.forgotpassword = async (req, res) => {
+  const { email } = req.body;
+
+  // Step 1: Check if user exists in the database
+  const sql = `SELECT * FROM users WHERE email=?`;
+  db.query(sql, [email], async (err, result) => {
+    if (err) {
+      return res.status(500).json({ message: 'Database error' });
+    }
+    if (result.length === 0) {
+      return res.status(404).json({ message: 'No user found with that email' });
+    }
+
+    const user = result[0];
+
+    // Step 2: Generate a JWT token (expires in 1 hour)
+    const token = jwt.sign({id: user.user_id }, 'your_jwt_secret', { expiresIn: '1h' });
+
+    // Step 3: Generate a reset link
+    const resetLink = `http://localhost:3000/resetpassword/${token}`;
+    console.log(token);
+
+    // Step 4: Configure the email options
+    const mailOptions = {
+      to: email,
+      from: 'anhntnse181829@fpt.edu.vn',
+      subject: 'Password Reset Request',
+      text: `You requested a password reset. Please click the link to reset your password: ${resetLink}\n
+             This link will expire in 1 hour. If you didn't request this, please ignore this email.`
+    };
+
+    // Step 5: Send the email
+    transporter.sendMail(mailOptions, (err, info) => {
+      if (err) {
+        return res.status(500).json({ message: 'Error sending email' });
+      }
+      res.status(200).json({ message: 'Password reset email sent successfully', info });
+    });
+  });
+};
+
+// Reset Password Function
+exports.resetpassword = (req, res) => {
+  const { token } = req.params;
+  const { password } = req.body;
+
+  // Verify JWT token
+  jwt.verify(token, 'your_jwt_secret', (err, decoded) => {
+    if (err) {
+      return res.status(400).json({ message: 'Token is invalid or expired' });
+    }
+
+    const userId = decoded.id;
+
+    // Hash the new password
+    const hashedPassword = bcrypt.hashSync(password, 10);
+
+    // Update the password in the database
+    const sql = `UPDATE users SET password=? WHERE id=?`;
+    connection.query(sql, [hashedPassword, userId], (err, result) => {
+      if (err) {
+        return res.status(500).json({ message: 'Database error' });
+      }
+      res.status(200).json({ message: 'Password updated successfully' });
+    });
+  });
+};
